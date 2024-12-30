@@ -1,1 +1,556 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>Custom Google Map</title>
+    <style>
+         
+        body {
+            display: flex;
+            flex-direction: row;  
+            gap: 10px;
+            padding: 20px;
+        }
+        #controls {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background-color: white;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            z-index: 1000;
+        }
+        #map {
+            width: 65%;
+            height: 80vh;
+            background-color: #f0f0f0;
+        }
+        #info-container {
+            width: 30%;
+            max-height: 80vh;
+            overflow-y: auto;
+            padding: 10px;
+            background-color: white;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+         
+        #hotel-dropdown {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 15px;
+            font-size: 14px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+         
+        .label {
+            position: absolute;
+            background-color: white;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            padding: 5px 10px;
+            font-size: 14px;
+            font-weight: bold;
+            text-align: center;
+            color: #000;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: transform 0.3s, z-index 0.3s, font-size 0.3s;
+        }
+         
+        .label.selected {
+            transform: scale(1.5);  
+            z-index: 1000;  
+            font-size: 18px;  
+        }
+         
+        .label.dimmed {
+            transform: scale(0.8);  
+            z-index: 1;  
+            font-size: 12px;  
+            opacity: 0.6;  
+        }
+         
+        #airport-distance {
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin-bottom: 15px;
+            background-color: #f1f1f1;
+            border-radius: 5px;
+        }
+         
+        #selected-landmark-info {
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin-bottom: 15px;
+            background-color: #e8f4ff;
+            border-radius: 5px;
+            display: none;  
+        }
+         
+        #landmark-distances {
+            border: 1px solid #ccc;
+            padding: 10px;
+            background-color: #fff;
+            border-radius: 5px;
+        }
+         
+        .landmark-distance {
+            cursor: pointer;
+            color: blue;
+            text-decoration: underline;
+            margin: 5px 0;
+            transition: background-color 0.3s, color 0.3s;
+        }
+         
+        .landmark-distance.selected {
+            color: white;
+            background-color: blue;
+            padding: 5px;
+            border-radius: 3px;
+            text-decoration: none;
+        }
+         
+        .travel-time-label {
+            position: absolute;
+            background-color: rgba(255, 255, 255, 0.9);
+            border: 1px solid #000;
+            border-radius: 3px;
+            padding: 2px 5px;
+            font-size: 12px;
+            font-weight: bold;
+            color: #000;
+            pointer-events: none;  
+            transform: translate(-50%, -60%);  
+            white-space: nowrap;
+            box-shadow: 0 0 5px rgba(0,0,0,0.3);  
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <div id="info-container"></div>
 
+    
+    <script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo&language=ko&region=KR&callback=initMap&v=3&cb=1735533649665"></script>
+
+    <script>
+        const airport = {"lat":10.1627424,"lng":103.9981601,"name":"푸꾸옥 공항","photos":["https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27x9cKmG79b9Rsy2_4TcTBdoYswppNFjto__mvupFG9AqM6wRJ71dAfhX6VgFWzgK96UQduYgL8NHOGCj0BSLDX-fwpmOp7n3hIsuEaYRBoY4iaTSyIWiE46q6-wQaOfDSA-_dCxaQiyat4Lm8fqfpLWR2saEgKwQXGQ2qcnXYkPVkeS&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27z5XWVNVleO3BzTKyHOWC41_K27ABxf1ls3sCvhwLiIP0Vjx0QGUl55PofpqqtlHltNXezngg86o_62a0j5rPYfWbwJclMfeFUOx_NMsatSleSMGZT5ExmPqs37JrUqMuWYk8cfdxWyj4Xe6lvo0btkhTkTIDyrt3pvT1z9kLDm6v5J&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27zAf0vjeR324nm4y21ypPYoR1PMeVEjdfYgCl_hBJdvrmvclRCPWiAe5OTVqNfL5KOK-KQgDcD3laI7GLRwPeal6PSY1Xm097U5c28dmjZSEvYMk0Deny-272VgloNproOgYsJuDqZsWWBGpy7HRhQYKl71V8pLjC4nYIFgNn-HP2p7&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27xph7zpECOJLY6h2ms8J_EUGfxeoI8Sp8kTKByl32IN9JLu8Vxdf1BJwPL5ZrqMHLtzG5qREuNzzk59TcxT_Z7kmh2DxB20y8_8G5LKRo6bPE8S_Dz0Cs0rH9sRqo-P7VbjjFh60lOr19L2snPto_0rRqneiqEHU8BWj9FsCupUefj6&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27xy_hZgfRq17J_bAP5rH_ORhIlVRlAI_0qrkYk7Vbl1xI36ldkfoethffzBHtosxz0Du0oOQ956NQ0mCYtj26jrMO1caCAmemRLOKKvw7dnvfCJPr4hiToUYrKwLkyEXZQpJchU7IV0y7Yf6MMZjPcKtarEauFNEp_tfi42_bp5A-U6&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27xPHq909rmHcX8SsIyxPpJyvHeelpE6rcXvwPg9O6JyzUrZwSyvI9USq9J_-k5d0cdCsab_lWlHOWrdernE74g47Gp4Ht8ICqSQN4Kn7bS4U9ryi7tFxdQVBXmwhSRu54LaXQuIvazBFt523WS7GQh5rfC7wAzB1bEQN_wD0zs8KCmU&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27wJP4u9WRw19sT9NMtlpVMnG6z8ShBqa8byw9ZDyJRq3q_lN0QrE0AQPI8Ge7zm0ZyAybwOnvwhENoITgG3LiTm7QZX7TkJuAMnp7_k0wonLOX3fS8JAK-17aNAOBlL7uFxnwxaSXLHjCSOUp3xXHLpxma9medBgk5jSOlntaxbiyK_&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27xh7R6MaLZqj79GG97nCF8Dw8GRN2NR3JdEKzO1mBh98CfQfvOSLU-KPFbuYDPtjD6yRYWf58G1rx4cueSw9eNzE9LHEWIcz-5z26dPPM85i3lbe_gi2Vu1R0P9ZERZ7HV3IOmovej11iq97wxNN2R0BOCl0qye-AXQ8rHFv99duq--&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27wEZc4E_9d-H3NUQvZDYAHyPPzUIFtkiRwTPfloXp_0mpkYy8YBKcU5bCknNfJuPny5l3SaPD-erlVTRahAYip5pjCeXPeidvsiYozlbCAF1OhRZ8gIYJTxMtwWOdsirqq8LDJF2arC11uSdQu0irR-_m3wVxfohknLGHpANBKDpsSG&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27wSQqGOhs1jijSJnqqo0MBQRC-8zeFEGWlHkmiBLC3P7LwunxWLzIqrOjNRJm7NJFrtthIBprRSlvJ3Lq6DRysfWAZo6fblUCFWxniOmxKlNc_qWRBa5c3O0MGUx-3uraOkTX6HMdjZi-8vhEMUTBSaduIHspngRFa63opUyaxEfkd1&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo"]};
+        const locations = [{"lat":10.3579694,"lng":103.8496158,"name":"멜리아빈펄","photos":["https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27xLfES9DG5jT38IUQRgjXlWkAtQEXA5hT2JzH-wIzphjko83lQlLMBtmEyFPfw9YuNNTF9PkPa418rOI5DcXLHCcBNPmNCMx_gmCIt3JN71ktwr297eD-ZA1TYv-eE9pzTIre1NqR6lrYHW-Rf-sJJY5G1DeLOWM0Jsoq6Mbh5d6ptZ&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27ysTDBYnuCKA8F96qwY1KVYr7g5FgJCzKfku4Fsg7B-46GdqfpGOhrjx9Jq_CizF0xXNljiWZVkRcm_O02LP0Oov5X2VeeOMAn8nEsaVGV8DjFsGvOuotW1NuHSTDUHAc7TnY_hAf4oKY6wg34-wu_qEZd7T26q85XaQ6dh9Hv631la&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27wUn4aiYD_vCm3MyxMFDjCAjmZqC8DG6uhxqXvJRi013fzMKMKUdqNCP986C14IwP33ZW85mRp_ZYDksWdq2-7ZNdOn1FawlPIc-Q-cny8an4vlyHvv9JImkGmTtVaYwHfjEHXfaufvTqf9pWrle5Hf4o527JPM98EbFYaExlcbLB36&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27wFUlzY-C8XFTUGu7BdTJQ7GvQZhZDwr6yow6YeYfniBLB7E43WKebScQcjSRIb0p9WgSgYGUk-I7-_oXTW1-TGAPDLRwTEQNc7pKfOZ4LqVbZhNlX0-M7-hhh6rwPSR3tjMrHCjR2HYFbp4Q8MM0wVkGYsaDofbmJCQ7qTMDMIvaOO&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27wavLUa3RkvrsU2JYc5_KwrKnYMnO-VCYS1kQ0u8ixBGGFQ9n3ggO54_g-g-tKAtIPlBuuCqNCEQ4BIOQ_GYzhwHKFbSipniXDv-0t7Up6_vFlBHiH1ChSWi9nmowNRrxhgiCcjrV7pSaUqURuIYne3hEZJiGBnndsqnUUltx6TMe5j&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27wnS6lJJKHrdHvV1MWCyf4W6Yqo9BnM2ZVzmep2OYxMRsoPmb2Rm1zSxiuNttDAOr_SuXJUs1lt6X4XQ7VilS7ME6udthR1GQzoMj_VRUtVw6XOINqwtV6kQNkrI1y-DHFCkiBj9S0lVTKlnjRTLGti-H6ExoXe-gcv10jBHUlFxthR&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27y67-XIX9CERxtYz-dmD9a_RYXneM2xcb9ZHcofKHfpphUweAWrpy1jIeQhejZMKM2XNxkunNvamaBmXGYb9604duOAJIwGcTVz-FlVT57NSFIKw7mTcyQUP8l3MoFrNHQbsdYqmcp6WXzhaTuPl1rn1XjcQwTOFEFinf6DJ6NLZ3dn&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27xDPM5HAfXrxZvjYPT40jrqQsnTmr4AWBmgTfPx0zE-LSDRCkhS7WABuu-URmo6S_Nj_MQYLaR1QiyuD_TjpSmStJj6ohpNSZttivTCpEWnAsq5XeJpAJk6Bbo6AVAFWvKnzdZiw-MD-EgidQPiLtEYU21KfgaPF9CYTU0hpWdI1ydB&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27wKhuAPrTfRw9bHl9tcybTYk7iWHfPXk6Eo6T1VHx_5wBmGhdz9jaAPWREk11Ta87KZwIItQsyusP1MVpjUbG0ND2HGvnxbjIWcPtaBWyk3uMo0GiE9z9eUabC7NwddLW-mBiQgcVoEPd3YonJdZK7LOK5I1vwQnFXilbXlHGLL_ojk&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27wG9Wf3zHod1Nlj0fEwYIrF6_ku-RsuOw-uhEfHoB47xCBg2cYA_cjsXeP135M2viAgrUKwSlKkv2zhKStcFo_zoYD1zHS02Tr0KqRO1wYAxhRFXSBDqT_PkUaEGHVi5FPpxIDS_8TOBK_j7UB1ANltRDK1SvfqcX0_2wPjoK8vlDJF&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo"]},{"lat":10.3374608,"lng":103.8498778,"name":"쉐라톤 롱비치","photos":["https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27yncWOBEWym1eXErEd2qCSrV5IQou9EDJGeMl5cYXsWhBlFQhUcyGAuoVIj6ucLdVTSgcx88rjI19ffkIOAVykHcx6V-dftDvCpIhA0_vC2w8R2F6xPBnDAQT3q90-OQXBZwvVCHdaSK5jPRELDIKNuLlUyO2ZaTLosLtyf3aYBV-IF&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27zDu3DFi_CVnpwjBWvuUUOtPQN8TUmqosIgQ5zCSNOfYJ99gSBgEL9Ed4zdufyA9xZ7JwGQUGaoQzBg9mm4Qk7Qe4qCioUDFT2cg7UNXiUWadijrGdOM06oHSdaaBNuhPPQlWNB3CVwSDIzGhsxGuBS-jcW7uY5skcWn0pRoYjm6lzE&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27yFmzGr_Roy9_0XYz2QTtNgbjXpMeT5wuCe0YcZUfdUKdjtmvDh4WgVu35QseI6dgGM87VS1ELmUu8MwvvjLlzTL7cXDFaYv0F-XGE9TOD2oE1d-kUv5btgwPvEnNutUNGrSegMMpwjE7fWBX2IXAMO7hm7iGrzEU-U67LjtW04vazk&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27z23yAKk0-JCYd0qDK-acfdrcALOmRvrkTOx4nF5xoMh9GNgFLM7DyBe20dojEGPcs5dW77DtG0D_M-tift83MUBnGeUnpqrM3dOzghRtmnh_fHcUT4JFUHFPDfMcx7Q7dlflQLHgVjJCE4sPx9VB-QSU-6BY6JYfbS1NluvHr7s4kT&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27zUYQY5mVXbkW1_NSlVj4oDFTlnhDBy8q6NjW-LlFn8bzRPgiHI7aYNmw_-jyTqU_J_h_RzAXaTTmH9w3qaaqVg6QwwEwzcOp_jEVBaQqdxMwgKw7JwOfpfGKGjcsDPbyMs0zrDRtvu7o_IHoriaJdTD-EMNiGbhxyrDRGN0HoyjGJh&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27yKYX_Z2KiwW6wxUpNTDX6ZMYDfyn590Lhla-J3NmOGSvqgtVXxA7eWn341tacGgt-LYm_nmZFENUULn_HAfhQRc2yeo96jZCnEkH6NIb0QxGf-gjn4Dee964GkeQEvJReT_vtF8IzuJ9glmhgyM5kIb179IeQBWJnvZBH1tUb3HQwn&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27wN8HTpjLhz9QSgTpW2O7iaICk--RUrRXJ9G2_-sFSMm529GvhU9MF_tUttb7FUysWVCBRQpWmF86OTE6eXf5uljFe9xxIM056aBHeh3f1LN7H20BRVzo9cknV3aKckHhnusKwDTdyZa03K3IfAmIjFr51FMqzx_9zF1mrlG8RBVKpy&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27wzFjX8FBMinKun1ZpIhjU-msb90aZ75doevRo2gYzhzELhIwpG5AntDFS1Xu-BjtvvimduTtHV4fo5mHuOFTQnce_bbskEovrpvE-pMizI6OK4RbLoxu4bLYzE6G0DyY79xGC9JJUsitIbkssrG8bQJYGOCZDoux1eQKVZdkOxZ4ca&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27wE44LncP57OzqIdG8ZtVDmZBPsGylwXNnY-mgMc2mZd_gWr6B4zq2fRe0OuDo_mFMNQQWTERzvH27i9PWgWNncaiHKRTt2H-eQzHvxQFW85TuapfyJibFr7Kq3xEelvVeDDIq39pGyIj_V8Q68DS9jvMondXFlhmBmqrlf4ZsZuhiF&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27zORasbs2oTy0Tkwd6FNr32nRxFy_934xSDvo0cqjncJHLGs1Fepv7XCbgOBuUHpzgUMgSU-unwI_ykDCrtLzGiD60Ln5ZmVDrns6tNfVLFD-HjzaeIhxLZzNkjYG-wwKPrqcgoSmuVp02dBJIjF-o0TWkR4RFy4JD4-TRHcoYo567N&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo"]},{"lat":10.2821905,"lng":103.9230444,"name":"모벤픽","photos":["https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27xYYPz07Z2ddTGEspOKOMKt4TCQG-oXPf5wPnzS4dG3fsJ1T1eZJZWRQPyyBfdH-vjyRLAvnmmFHEEZABYtQq9_KspZ0ykoYqR0JB6g8MwT2MsP7Mtp5xySplDSH71N4CLpS7ozhtTsN_VuLXZTuffMlDtqcy9u2FNhFRlgTioLcenP&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27zrcfWwOFkiwrEG5hdYEphheKCyJuOaPcCilhWJty5bTs_AA4tituMxaDpAIYEw5F1eLhpY3YgMmNv2JZnTdceJULgRTwzbF0qFVnzEoHnqB83FE4viQw2iuSBYctN2DCPQNe-sPXGQvmTVKfSLMvuYKept2mKkxCorGcDMu2flJc1p&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27xWLhkZhfx_uQX76yYAf80ME2vsGOYPF6UtIRZ_yHC08F49KaCEZXrHeLL3IBWlJoTEeDFzb5RhiBuNlYWnY_Hdv3RtxbLuIi5iSCojJDcPtWc72TcdgHaWX-AXZYmuKpWcfxGZtn4W5lOGccytkoaiNiotK2sxhTgjZgFbnhlUCAts&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27xO-FM7pAfEPa_-kIJeGQdQO_08aq3kYnh9AhmtAchlR16a_lWLL_aqjYbwsx47Pghh6aEUNS4nRbq3lIhzUisu19G8ha97UQ_-qHj5GwplqCqfj1M3MwMmlo0Jj8_9Ovw_iC_27uRwCK3Q99TOUZPZEjLkL6qXTCI2O9stddNsU7sA&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27yrkY8scctQ8LeM6OuZPiLwU2eWQCpkKvWADvwRSFFBsaicWQA2iqDK3OIHjHSNFWXDPHhwsOnfLCgGHpufcGd7Dz7UrtsEoWmoiG6MXc9DRG_Xvx78Yx1OivIIvtEhLcDN87aczhwllHmdSVimDkpwr3DeQWxvVXRXlpncWnaJA-uc&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27yt251VOkQmzButheXnYDHNE4-ja2uJnj-4sZWnTGN_cHfb55BYSxY-6Hh3k8is1WGAsrpLTW_hkLcQPdXopvlxjsp2va-1eh7-NLHon_H1cup8WX4dWAqbm-1UKCkqY94WJxGbV4KPI2TAI4NjpG7lwP-PjPmgAjcXdwDnBgNlCV9a&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27wPf3UnMde3uv2jW1jkw_DoGLoRvmclpiUB7lqkJnRMq1ML3EVIgCfBHoQ9TEnMl81J-2ix6ZWFQrZRlmVjRXyBuxCT53AwahN0UCmC0aWKOU6KAmvirRJcNgqyAmED0Cd_hHVrnbNjE2RR7kfHRpZ3S2H5jL9N0YI8fAWcA34ZgNFl&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27zqJaldep7ZWC0NN8sxlXu_kGq4GxhQ6OP4ebXre6m_Ga-vGLdmV72DGt_58kidtXCh856h6lpg1Ah3zSgkIx1ye_MCCR9BYwKL9e8GPoDnoyKhx_JjqLbcFhHKyprfOx72j5qR8zSU2PhMLaZmfO0A6xW0m7IjLwHTcc-qRMsyf33B&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27wxTTu3Jj5o1fMJutlIIqMp9-_RSGWQA1OG0A-FtTMnH1qWB_XrzhbcvfVKIIo1iFv0J13wl3WIK81v8aA2FYVdy4C5PqNIrchwf8ccX3E35UUV-olh-DNdH3p3g9eYUCGAYS0hqCbbXbCRVRCaNIanGZe-uRTS8L9ndRSBjjNaOjgA&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27yoTT_0iGgmo7CJDOyTCCbj6Ttzc1jeFvUPGh3B6PO8GuQ3xrtN6NLhd5H9OMO0UqvodWcxDk_KQP8Zlb_mjUy0jFYzxYgEumoWTPYBvPSLOaDNqqZULj422UnMV998AdPNJuBq7C7VwW4O0EzKpnek3enfJ2b7S6UNY_UFHcUxKCqE&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo"]},{"lat":10.0295567,"lng":104.0075604,"name":"라페스타","photos":["https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27xWP-gWCNpZ-5OsaueiO-rZe-k7PHCbEVzotIF9M4iEeQRlN94HPu2VIHOZIDNCbZOh04ydeuNY0ymHM6H1dczxhJHsSZihOaZO6Mh-4NY-wHKPe7MvROC4tPpGR3AKkWMapQs0o7Svtv0urRDqJVRDVoEPhdmTS2lDKtJ0CpSErBIY&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27yN3Ik_UEMnPSlCwQD3eASxGAA4vSCEWeZkcjjzr-0H9ikAz_60Qs0C_9Gy7u_bjx9_9fnEvuREzKLAJXzvZRe81O2PmRi8ASeApltK3ncWR5BiJvzNAHlGmJpiL8GEDRCxNJuB_ABeu_ARhM7YyqPRhPkNPZgwtiiWRp-0jmDxmzNR&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27zQihUjaEskdjWavJYaYaHJPnEI3eKrKwRkrlyEgcq0ZXIGobO8KofsGj9_bgnkDcUgzQh1i-wWq2mKDZ8WflxwH4wxctckc7TYXNjs7sGyXD4MtYZtHuyxjtw8lfhilLiKTS6-Anx9dsNvUTH_bTstpJwoSuUUbDvsla_6yTZKgez1&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27yOlatth5VJlfN28uBvfpnlQfxFJdq-hHk5o49k_A6bHt2v1GeNZ1MaeG-C8KsWmRZFn5ez7ALixyvAct9siZeQLWz6iEJVc3tIacHaf2ikzADALjtlblsVcy-dilmPyShraztWt7AjrDWKv40O6lzoW3quqerYMqZDiegcGuSVObvc&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27xtyW--aawxDSUa9Lbk476E3V-24WUVsNhh4U0ldbfk3x68aB7wETo_JECqreY6QK8ndViM9WSFbhkR6Ew5HJ7P7eWTolRB5afbPrUMByBxdMOPtCBqawoMnL1KMlGtJTNb68DyobQxDMemWN6TmUNraoGBwK2Jn18Fw18JTAQsgPiu&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27ypDe4Rbo0HpJmGHBdoAOqU7JDQMWVGaroHb_YAKaO1xDLoy65avBUz36JYfQxBwHsR1R2uVT_l4YSKPJROKU3m9WbWl-6f6MmZ3DV7ukwbQ_1xgNPc33ylRyJ9d2hp_GUO3DRhSz7hEVXwAr2DljaNVfKoGaPoOJIBZchh9M1BQecU&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27wjeGTJU_XjOxLVavW4VUcjRF6ej7mW3xK0WAArZzpBhkW6J0q-M6OH5PW0iDX0DrHbodN1Jn1GZzRm_TCQyBfUQUZW8gIwY8RkoAp0FLerU1FZxyqbUB4f2a9FWYo4PsjLRPYm9Ub8Rp6AJ-SkuNvJRa9IcfvKQXxd99zQXrAduVZN&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27xfiQLhcfP1BdmlqUXmkR6Ze8cFIDt1FRN1syI81wfxZ0AvQMXAh86rx6e7Mv-Ntpjp-e2jf7bEQ3zLx4fwlVi58cQFMRWmeBcAp0pP4Xd8eJezWR-hcR3FfeBHSwjaT27cg7F-bUMBlVUB06qgfxCEBDa5NTPtgUf8qE9FbYUq9s0u&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27w86bpxhy2SlkhwplWnBZHTqUZd-99MhqwGHjoI67zm-5GEFeVfpMJEmNi2SPpPHTNN3Nvdljm3ie8gIh89SE6bAReY2fC1aX0SfvjGoqcZ_W9rEe3ye3bwQ8R35dQdXQlmhflSVNFwTGFvNTPNXTg8B3tZAvDFhAwqqzEIGZt5iRXu&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27yy2DS50LYnxse8NRXScs-yXNWQDorf78jvwzvDjLizF19mBSnJzFbnOWJarJrAR3RIJ3oMBPfnpz_pu_A43MrAude1Uwi8GVOfvDAjSs83_-zavhlYJAgoPPP7I4I7ISSfte8UhMB5KpDrviGXw5HiAoFiOx5J3Kx3Ugr4luLW1Msy&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo"]},{"lat":10.3423539,"lng":103.851334,"name":"빈펄 원더월드 디스커버리","photos":["https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27yrXfPM_LfAH8t8lXPqwSwUewL4iqm_48nrUpT65SLlYAkN7lge9pGueTsQ7m0UtpFwI8_1UwUfxQvxm_wxmvskdhaLONLv-tFPXd3Slc3zf8ySUTACQR5QobBzJJ8nVdECSZVVlYX57sc2bHCWrYvSgCx6G6pxvT7uXfa2zayuVl2j&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27yNcVT6UK1Lw6TdX9XBiBxkUv98oJ_PhaWou6cPQ3A8sywFc_ZMOOqpftg3p34ofz5--wbFmlWSdAKYxHMeHk6PGQHkjFJYYCGF9Ok7WpUT4iIRY81rM5hd6_KDdAhMWxvMOHsJ7C7omSvIZylKwO_ya65_3CyChhvdRJ3bs3lNoNXC&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27xgKu2l4J22NyBXr8E8JiVTeQGYKx-O73sedfbNKWjAlQfvf96B6VED3VdXOgI9NCF3aYxp2uodwGJipob77meR3uoN-FOtI-ZrkNH0yNriXbLvXSXcO8yEzVZAetwsokLCKNQrb-cHB9VES_R5CDiBbP24o7XFSe0tTs-S191DCtsD&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27xS9WmU_UM9ZCotTu00Gphuz4ZgYESpbGuSolvh-smiwyfvW5O7nwQKjSY-zsLSF1O7tIEID3QyRrMcPqB__Gll1cXzHm3lNoeaWVuUphH65P7vjeFVU2XIT-XnQIEL_8a1-QIeklMLVyZ-iYqVKmPgCxU1Z7C7bpHqM-sYF9HNKw&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27xpFf2ZUlQFldB2hOB9SHgLE4UOTE7i3seXtvIUsLO5MQuMbM7peWhXTVAS1VSkIqokHeqfulVXPOUTNN5tVXfUkHOsghszS2WNeArn74KqITPB0xQs0KIJeIVKo2xlZkloTNthHnhsRJ2VZXMtMnJ6dE7oNW62FwYM_ZdsMAsrX10q&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27xEw_xtnAMxadOomFbgkppI-77sNX9tXGpuSrYV6HVhoZ1zsj556MfsH_g7iejGAXrPZmtHgVwQkHbiRO6trqsbyBEfoEfGsI5GoQUGQlnae_7gVfofyltloGuoV1l8D4PwbsZQveAjDwGQh54qjAwp8QKx27ZtO4_8i07ChripuA_j&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27wgpjQC8wZ4-bufRGaGMTfKPXNhAFA6IVJp88XPndGAR-QvgxO1MNowcCU2KNmIFuHIg5R6ovZDE0M1eQHlVNTwfWWzTuDBwLe2xRhOMmb2vQHsEXaX4LxvjY3NcEEjh-C9hwU-l01MUzT32dbMBe_DBvc065gwxTChZPxdHTOXkCtu&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27wVM0_IQFBetYPun9Gj7pBH7SzM0H8JM_cmApyZ6IRk8InOFQ8_gbxPJamIEuc02kBB7LxWD3Y_3bV8wJIaJWOn17y_XjaAy_zSFHiJGaTGoFXvEskThdJTdSU7kR0cRP57IFavhHFZiSHbH9LArO8fvARyoEnTVzeKjk4LQ_6RH40G&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27w99sDbgAVt6AfcVXqb8h1ck-vdXJ-WJH1dcJ7aioKkZqOWe-gKeel_K6BpLYlgja1S7MsWh6ARwyesJzllEOCYMFcdMeDbkPGPje26P3cBz6BEXRiLirC1XGQoZDQHfbmEMdYCdW4ZxBipsWgSRWDlwBiqpqm5RDLTEYI6adcyHDtM&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27xFu_yHNFOov_WKvFq99sOw5CZHj_rDBzLzL6brfyFQhm-pWCPj5hs1maGEy_u1ywgWQLrLUpda2hQCPYGdwbFmDBiwP0H_MZrzAZU4UImvPX_2-0m4GHfN1jWgT7jRS0tBE_SlgvpWu8jp722m1USbmZm_UzF9PLnbum54fnp4FY6s&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo"]}];
+        const landmarks = [{"lat":10.3285469,"lng":103.8630994,"name":"그랜드월드 푸꾸옥","photos":["https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27x0QOj1aGbvsB0OfaKooKbTg0mV6I06-EyjAay30ILdNFN0D3Q1oV3Fzluj5CbRD2uzroyrU7jevqlS9aLxmrtviu0P7cQLGGkd7-nsbVcHn7966qWV-qmpZxHoK7mU083tPOgOFD-_-G5HZE_Xpp6z1UNPFEDoBe8xvAWIKcNMGvVa&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27xHApxj8SiDG-gUWMsjmxhjWge6MiFpJeWbI9IXvpaF2VVxpyROuI9IY1IDZt5iF268BrbgkJ9BNpIDIzzpOeiIXi0cH7OuLhI7E8ahwzItkR3YoEIgQiR_p57ACx-fCJ4vmLuoYtf-tGjw9s7BfkYLPSPriJAh5xMeQ8dcRvr2TEgp&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27z_yg1tXVcAUAFWoV3FA5ojA0wRK2RyZzODv923jJnqPHbCMZTPr1xXy4GPMKcpISh1xSadFdtHUTtWhUEzSEk9V6laTdmUPIpmZYb6UWo8VWGABHz71tV8Z_8ZFjalF0L7CMcdFKaTR_D2WSbb2CAk3x53UKF1Zqv4o0pBZl_Ck_o&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27zRURY4rRo7GMZH1Gs3MG_5oLNE8mj17BPUBMl2tn-8euuFnRwzHeqc9enjPPpSro80eX7TGjbGYlimYMKQQ5I-gZx-lDmgfvx7qAe4Wth9KhB1KkZWIS5WNR4pEn6ESTF3qh1ZK90XydQ4j9EprZiDmpxOYcQ1xsr0YMp2P5Gb1Jxt&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27zMVDNbXIf4Yftcl-n4GWd0PHN5OFMTixPr90carxE9KVEFlC79NsW9UDVwhuu4fUIYjIKp3QXec3lTzwq0uVvxoTIjJUvDXDmNH8hXFgFWVjKAS0zICU_xIOjkQEzLD7_d8XKEH3Q2UEwK_4xq9Rks9xI_gxKgQAhMStQCXmEpY6BK&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27wAIksq1o_bRP8T2fh7iFMdK5OS4xO_E1dB48Vp7urYAJZF2w4QaJGEdM69tGDtP9TIRWVRt8oESYjpqEmsrkcO5_NaF7dA2_NkEoxd1wCN5L_AU2-26Dsk9Iit8AabIDiVHpUxMaLQ4OIlTyZaFGcQI7JwPHe1R0rMjC5dbCK__aac&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27zwxR_g52c10k8CVkmfSiVI8i8_zh8jUs2A2q2pu7iXBWP09W_PCBiWGsp7ebVxnpQHMrqke9tg_rfNb91_juJmckldZwYnsZ6Wy2GoJs7VPqgFqXXKnPM3xhob2t45ZgRz2YknAJlGq1kSaeaQWsH72xrOzJFcXmg-JRIP2qyhGQrJ&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27y6YgLEiaxqwrcH0LaBbA0OzzLA-jf-lbSOIVGLorb59NJa9FD51hz4O4r389K1Uoo0xVffrGD102SqT4Kyo60SXbiMoQwFaz5wjGUDFiNFakcqKP9ZJeS_SNkChh3KvxkWI62u-c7xywdq1u7L5yQUf54_1l0gQw5oX5jaE0e45WcV&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27w8yjBQ_hJtu3F4kaSV-I-EeKqhqW8XHrBkA3cSRiKawZbXC8pJvBgBAzf1ipB9BBUEN7BTXmUQsNn7qr7iXSBZ5uT2H7zJxwnFwfzidIEVpf7AEPrB9Sug9Kbv9pdvYv7g5uzchaLLjieHAXkz23uqIYu01taI70p-2pAvK2WdLzHV&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27xnVBLeIKQ-nrhB71Iwbn20rOcV7Sp9VcyvV253aWI6sUsIkdAIzCHxA4toolXYxgSPhzUS24g-wwRmVtH_9pdlbGlXj_bmQmbOKToS2tmubjYW1c2fvP-agYjrwQZx3HqI8vNA83Aby_Ft220BL0q_USEWmfiM487sCSxnALNsyiXL&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo"]},{"lat":10.1112721,"lng":104.0297962,"name":"호국사","photos":["https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27xNiyN-dk5L0s4xBXiiThXP87Md8lEDuxp1OB_Xmn6-NdspZhYHZVsMTceC3h-NFOVefQOVbn34WpPm7Vfcr44Q1e033_UdvJPyE2ZS07QN_kdLQKlFHUdLPKzU5aHdy2k5oLDdcVrDzyJPwlbWMGsumbbLjqeHLCqQkDoU7Qw193fu&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27yFUx4GNzZ3jdPE5cudAfWcBWI8cHJ7aFvwT5vZ2S3a2jtc2ZvxhMwKZsWO6H9j6LthdyLodhTdhs258x8DXImTvADTdIw-3kXYXT-w6zExI2qSoNaGm4iZf6lc7HcFDbrUWy2XT309ZM5Lnmw-X_-w1QgxksnEyk-BEeslAhlbXJpQ&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27yygrsT8RCSrhpZr0mQu1X1hHLkBeyrasIvGAfUACiDJSBnvcfd_EEBl_TLSmUxg_ioRd_BlH_40ZackDbtKzbIKLdxZ_CuH6_Ix8CSKmVCY7NUQMCmEtGH_CxhIprMOtomk8HApC5nGcIXy1GjiiSXf9Vsck5oRr-ZKRleedUqQxJw&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27xvm1724oXGwk1v5CfyLnU52pFpCIekR_1Ah5HCwHVDc4JqHZUzZ6izn6bv_OxX-UZH-9ZIGTkzfPn4PPPupYW5qiCDEc3xvy3Y8QOA75qkbeR8lIwUn2to668FgZkInAWDSAvFkVMeArTywKVepdXkVukhgytL1LxO_2DQbl5UFLSQ&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27yswDKlUOkPtecakfH0HuY648f-Fm3f1wjJ7CrWP6tXd6KYJK2nGmnO8d29zYnW_Yitn98oO-dBoo3EsQi1rNzJQFoX_Ay-E7P946cj2FfVxd2iKvADDcxMWP_706QJrpBOxebwZnDkqsApEVp09WZO63DdZCvGWlbU297NLfDeP7bY&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27yCNjqIGcIRMtba_uhpqGj-g6NHI-O7IQpH1QErQcq74BW2wtL4-1bIJMhDVc20UGABP17thfCHzG_fLEMT-H9WqGo6YO5oRe1NHglBJRtocd0_ubno7IjXPmngQEtJK4ApfVSCSx4YCXcBYXnYaq6sTpc6ycV-ED7xtfkNLvLPH8-2&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27zCJK7BE-3t3vuFFTElWiHNRHnLaTc8Y6qwy_3BGdbun_BT6KTA4C3cwiTqG-zTn73xtmJPWNobpi7rCaS7Ed7qpzhGDg_grSNEiOPPLSrLijO6XOJ-wmwpHpLPXVdJyqMIfgiwfTMBpDfQqQ6zFtzSIdNuGx5c8N0aV7oUI1zyHXOz&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27ysXr_yzYxGloZ9AvVn5FkCo4VcjyZuHABJ5ryTlrkA8zHrWRv1ZqtuRtGnm2BGJf-xDrHrwYYpytpdM_frDHRyGJtBePAUBLym2c2DJC0PJiP8Id5K9zObznNpYc6ZQYAkDLaElSqI4x_UdYu8YmoffA_JSImIqW7FNm7srDtetuYp&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27x-kQC2ixS0wIn38_rtro2MqgqhV_GR5hK4fbH7BVMnzrt7Jva_im2atmpSLAasoS2EBOn0Yu5DA8yM7IOjN15_DTPzZ1b-huisVVMOR4DaZxk9dqIygyt07ItIVy1qXVpPTNuwz5mhUvqx1N8Y3MtKyYNlqJvHdIn37XyVJjhBOry4&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27zfoHj7NmV76CfVHWQvHpRfAuxo9VU0MeZYXYsyY8xHPCgHJpyqPdPkTjE0ApfzYwKzAyr3_6IRO7nTF_mj8mMqexYGTe8EOzdTGBhpGFYJ8mK-k5uPeyWaTmIIzuOmM8qgZd8SQ7zK52OcPXNc-haPMP1RwPVbRmZ-0kZYT4X2aoI&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo"]},{"lat":10.0268997,"lng":104.0079168,"name":"선셋타운","photos":["https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27wR87evXFKyKgFDQ7eZ9P2S8g6jUej5PSWvNJqHwr7ZgIrOLCq4S2RDDJvZfaZdXHYG2QHzXveP6yNsfpDiWHY25et1MD2RlSvrEWBHFQYHe7howV34NHpiF0618JMwDjH56lKwm7-JXRihytl7QSvLrpbfGqK3uZD7y24IGIyeRm_5&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27w2zR8JcrOYJqpNEOz4pKPok1f3aw_mL29ToiKnvcwjMgNICYFyX7Thd-lJE-KjBIG-3W8MEr-jQfC4V8DHdosBoCJZsjaGdw0iN2SymdU2cdRGzTGT3NGVqorwpM_1Lr5fuM90WYucl7AQgZHyWbdUMTEfQlW48CG44P1YLsUpwu_u&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27xGJVxRA-9y5vknXHfkhlpbR7VD_Ky9GgJIgmYk-4nwUW_xR9faKqjcNRC09KkmdpszyW1mppPvs_SxGahd6WCb5dLuDEhIOrCoGQuhTCFnHT6ZDC7iMvl9nnFf_N47plzGgzFcJICfgtKkKzwnmVWuI0CXqJiC15i-r-luLq51oD-f&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27zzp9h6yWiz3mmUUPWXl9n80BEmzAHrB82JPb1r0BoC0ZNMPOO2zji8YQDnimbe9nioMltG0JS2tfg58wdQDVTbyVAQb1zBMrGwnHms-jH7QSzeH3HOheoLesnnzajRvGBlf_LqBADeF4swlSrfsOMGqj51xpv_J7lEiljibJ47TGCW&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27xobMc8guNdRjL-dv1ZzmB22c02bjWbxY6m98U2jS6YuD2ltQXUsdpWKque-BPMdZJgwWMxYzKZPmlkBShHTEJs_4Qfl27jr3d2tn5Ape9y0T0MkIPMJ0_edN0NUxHedHCcVa5BCNOdm4JKo9B2eua3iqT3sDt1bFci-trFLU7PB-OM&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27waBmu_AW3wWnee_E3ytS9CiOC5Dxixsb6nxbVzkTgso2rx6lUZ9KVmS2HUDBbvpSxFlmk2Ij5EefGspasjwv51kkBKWI81wZTUjO5gYGyOw_ZCj5_y0Ey65_mmeUBB6W-0neAgXPq1jZJyoLhJpNzYG2U8fc_LdYh0MxFm2d3ZNLXz&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27xKjdDCHnwpG5Obw8w-FxH2DOGwhJdURhifLNLgxLHXoQ5cpWWNALB7FaBUYLUnVtI7vqA2uYMhyp-1CTclI4DGXFpihdj_j5j99eO72_zW2jjRhAtt7blp6tl2JUnxJ0ASEyFKX6h2u8n6rR7X_qUvGpi3XquqRBcnVzZ4k11Yoxf7&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27ywa2LU8_sreINW5mPJtNsm_CLp3X5-Z63sbqjkKQoqVym0knKwZRt86zzF_mNhsN9ZpHTqF9JAXf9T5bz8ovRWbeqxGKmJNH03e42Ikiit-77dhqpVxy2XmulG4_4vWPVpJyMsf4fQ8QQ_Kaiz5TWPzP4KEi5b3pCAe9d-y0lVrBYL&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27zYXSdTquHvJ01oVSsO_gmTzjAePtaD-P89j9Y-yVoeST75n_I0c4-yXX9GXgjfB-Xikl83ODYDFhxtdtY-Ikvslj1SmIwhCfxiPR3X3oGEr4SQgagW8-hEFX19NQTNeruz1MCIHvQSJytLzwCxHA718rDKxqKS0N8uvcAJZ5eL5cst&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27xCxI1EEuAQf2GGnZsroqTXiFIvjpRHASlnYsZm1qAnW_ksC1xOPFg9m1HH674RDW9V_HOMvab5PjZqDuw8fvFFBhMbnhtCaFuHOUbLSrQWrvxqeBHd2Hd2fryHzUlVguxrJ3D0Sq8ZokudtvUfiaZ7XuKUaPBXSaCr2p7fiDiEuzda&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo"]},{"lat":10.3413695,"lng":103.8538231,"name":"빈펄랜드","photos":["https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27x4i_5q4tcDV-Hz3EPaPoD3LWTOSXuFbdFzyZ1YOncnWbDqRN5wFaYXhWVPYYGZPbmw91Pz4X05qt94_GvCORDgqNFUCVh3Rv6Qht9uEDkeXe692Bm7-69zxZNZfuqEo3xDogA5bAemDMt06tea2C5GbuM6PGcdfxdJgbFaEd6kruLo&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27y7_YzEQzMXPnUZH7lJNaI_t6DFf2y6rQi2G2qOdTNDxpf56kXtjP84E25UEa5UUBUQIW-trEh3kTc0Dphb3mH3TOkl858fdG9HouCq_Wt7JvfdT-2cA5NXSd3vq0pjLtFhdZeP5MOscMnx-tqxeWg3WoYzkSyNSku5n1jbqGTdx4ij&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27zdPoU2G1GF_FWf9gZ4P3D_Jk0qcgFSiVMdL0QaFEtx5JHRL5IkLGxPV1CpxM9T8S-gyxGO_e7oohRBF0vHDo-cvdAg2GHeORE1Lq4s5Myl3MSNa22JJYp6G-X37e-iKtsbK_Q6JTgCZydB3s7fI7zl2PT4ozG19NbyK2T_k7GE_TUR&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27wsjX5Qmwe83UtLmhGGy0eOgn2G88PqX0AJuvLrZiTNnFAbwQKBr7R4Rpgk7s3CMrdluW8bS-36HPCWElSkOOloGqXCZj4xAp2Phe7peol_aVrSewtJi8sgpQNoixQJh80nzhNSzGzf7aAt2mx47oDWHa44J4QRaVeSChQgkyO_ZHwi&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27w6rR5EEfYm4R_i2fnXk5k6nnFWLB7xRTEbKpHPClyZy1cgQ9vcAwgI2o739HUvlpuRrXOW77ik1DrpbvfCSvEa9KJJaRz4uSIiiYF0Xt0Zpa55NqaT7_5YoaV0rbsAq-_dFNXzmfY15uAs0lZleBvhdtl3-LZbtuyq8SKL4qBdLbQT&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27zwXyQXdtEB6HhuN-4swgQAZzSj7Ju2_GzKLt-USscT91manaTpn6TUiP5eMhBq_w933HjFEflYwDXXbmb-zZt9RjVLpTbuxIKCaaEEQufC7Fcp6KNREfIYnuvOoiNyWFH1dQMukGleVuRLg6k57tShU7Mywx5Yvi_CzYo2oQiU9TqN&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27y93Y-KPLyChLcdSJXopIc071VA992SZqiS8sFb08FPplmt1_N-LWZ4lUcN9sjrNcvlBC0G4f1Be65TOGyms25a58MXGkWftpiT4QVnpJAAFGdret8cEMWzMRFuICz7U9jlndVyujO-I8HkQqXGH4Gw7SiSXvMhjQyMWaUKLXwOCROR&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27wv2akFn4-DPbKJNMZS-RnyfcXy5C-gCOnY0ySo913m10LO_xB9G4OzD81WEJ0j0z0mWRLWalcjpxiGM_lrFptPiMp5jXU3G4kjSNrDrsDS516I2vaWARRtwWbGs7AW-oK9dvaGx4P1lqMtPa3fXTcaUsJkTMq2hS0JrTG6aPmYxHlH&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27wiWU9Wh-d-rHRrYt5p82mrG8KT90oLb9QcZQVTCqz79r14HCnFr3XNoUMCBgLi9hHleRd1sIU5dgHXFYBnlNAzgJ72wN_JdP_zMVPGYYkcNGYt6hgT_CfDLz38la-7hfXYDrj1xRo9sT0Cllmcj_suxVlXDGp0SbzwducFTNALbSA4&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27ysuWh9B9Ovaphj7XT6zb3Ju_qle1MRhshJVSx5conMGwo75H9BD_xTcCUJCQiw0FL6StnVsyU9aPa-cRQnx7PrHh-RVsEo5RCbZHlv0oNY2wQWJbNNxYsr9U2NJ19DzAE_QpRvobS-KIhyHII0Ye-uso4-11VKGTjDrehviLWR59a3&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo"]},{"lat":10.3370384166803,"lng":103.891446077072,"name":"빈펄 사파리 푸꾸옥","photos":[]},{"lat":10.1953979,"lng":103.9679623,"name":"킹콩마트","photos":["https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27zTdEuNGSnj2j1Cvmhy3W5KBpsKAEv2cB7iQVf_S8RIv9hM1MobGv9zPxSiGrG-W692X1BTq8luiqk_aZD5cheWGIV8BFk7i4mzHprV-vIhyKmejEDVNwmxd2yRiR4Pi5CmRP1cTyaIMqB27FXQ2JbkCCvbqOOlJ8pH2vtC2h4hHhrD&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27xKoVyvuhwCCYLJZMFjz4mwHU5Nel1DC0PprtzbkM_KhOAmm-l49DFY4DCz_Bg3V3CrqJdmJ_npDKQOO9COdLZLNodM0DJ2tnE9XCVqn6cBfcI3P95Fb-4NuM4MAdyLgERxtcGkjlnJBMD5NrUj6cGCp_W63cCovgg-rzyEIiGEzUdX&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27x8ULcMFYuPCsuJ4d62hGzTRQ0qNSjSr-r6P4i9jJuJ3_DOFknIQbGchueye1xUy6AKiLcf2659Tzq1Q6aVsL1hRC3UkZOI-HQhWeXXF-15dCFUBXl6_kdI_rV0G6HyDo34Gl7VSNV2B8OD4u4pQ9chwXEB2EGgRgesSqajDQRAp_v1&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27yYAZggbt8LJ4oWvyKVhgP6M9IgmX6aKZifTLtMdG9wtCiU72PZTXXD5l1z1gci8zX3wwzWT-AGe0P0BjlLBfI4bewlw9RVZ-_DM99Vj7NQwg4iiONKhK672E2GjlErAPqBAUUBDdA4Tqi4D7tAw3DSz7weNiMS039FaBi66nMTorAR&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27yyJl1mJ9vq6hEUMtS_k7FpTfrcQvGCmZDeqH9Ev_Z7MdNWAN8AkGqE2t7RxaNUmFpJEdCfcr1GGwkeePOwIEA8dzgIEQJroehFdLp_Amb9eyIm9CaFv5uX9-RsWabadg0vWeQ_ahsg_hYUt6VhUb4pUXQRvE6hFiwItm2KieT7sTfn&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27yBQRePj37f1ba0vAOzk9-oxs_SbFd-686mwhBtVgtMDYz78jAmrwn1kq7mUyekkBnFTiR1c2kYrKDm6oXq5Bc64V2JHbz3WGpi8dcedBczaSNjYKTKjvZKicn_kQ8CfYN2BUpYVwkAkx__4JdlT9upKka3bvTqj2tkBqiqmCryIUOT&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27wHyf1y9y8WgAKcRXZaDZh_uygPsZ9WajhBa01zYpVyxI1GsrRSwFCP5FqCT684wqHny0RXmgDuIhqfxojFsvj3rA_GlL8s3M3mYaGKyus_xtDhlJ2jhwrEhPJcT4v9YTliMO4HJEvtp9QCERXVGQRL_t5oaajWxbHp2cKJYoCouxpc&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27yPQHuUyRaRHCclvl2YFMbs4JteVxv0fgto383VJ3tMcIhPKW2vTfpvV566cWea_X1apr0Lm008smMBJcSti28TSQYkUvk9mFFhl1yi8e9YatgekHuDSaPbPI8fEeY32PSVIv701GdmW-v9Z98izJmb2sc0YWqJNW631QtVv_V6FPDh&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27xNL1T3OS_vREfMSM4u4uyAeJVKUobfYSRX51iK7R78oCijix4vCCkEqi5rHPbCrEJzj_-o7-yrzuyJyYdaaKnChQCU7FdbSdHjcfXQ34gUCBa0fCHGBwMFbwIdGMv8dckeII_gA3b7y2eOWv6a5k_GwJ8wZmTy2GWCjKodSyaObbZB&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27xsKdxbv-uuFw6-sh1jJulxMHsjFVDF5otq5G9e-gBfOb5tzXLlZbWRUdtlAOfpH87j9t_ioZf76XBFqdQngLKZWw48TnCwKrG_2CfUV0OchwOY1ruwJeR5FgxtORCUa6alU6-AuWXbSQFU0li8Ld_fK6fxY_o2sIiXtGGGoLJ46YSy&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo"]},{"lat":10.0433494,"lng":104.0186942,"name":"옛수용소 박물관","photos":["https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27wdsVQO2Y7eWcLq9IduZ4JnFwCrGPI2H5qdNBTtxKyimegZLgtIyTsoi4fWXKwvOe5Rt6lq9nkaAYuZzjKIEpS-ARbYw3FZG7A3ayjsDYOHUC5_ryVYNLniPz4WmZtZmJ6nP0cwzF0aMXPXDTjW4acKe51ffDF1HQPwvGplhzXBjBKo&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27zKhmPc5YOHfjK9sYVS6GnTPsx3Ua2LdW0eSC8YcR5Wd4hwTJX0gJMRPc7xK1XGufm66CCz2kOzkKh8J6RR_GjJYGGYGlZ9Om1vDAta544jXfuU8Mo2eCMDEbS7AjkGzdQjaQTvOJLana_YZorvzwBmx1NamcCJrfysBrMfQowjzWFH&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27xVtvmPA6tSXTgnwfeliyHeHLJgWGQQxtTAsM9VKgs3UmdSfn-uyAHLvPG5EpLQdyjsQDR-uOu0LvldstOciAeWxud15gw7UMyIdPkrx4tiZ0kwgcfCvdW46qZKeAFWCeXpajWYV4mNoDHeJU0d6GN0qyKn_POlp34tZqC07DuPPT3N&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27x17gOKpNud8Cnzru1pn1JG0D5hFv4Hv9_rLwbxahiqc4-02Udlhqaa7WkoELg3DAQXv0btGvDlRO_WgAx9oxX2BEYkgDtNqajpXYNm2p0FnEPJ3atbnXpuCNFsKBMw5SgGvxssdHKn_BELKR2idKFquo1N0tn833bPKKSKgFK8_ZD8&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27yM4aiCvThYyoB0V_v1lTJqZZH9lyutB9UBdDLPmSVeHHSvIonf9m2__v_rw9da5j65fK4VaKAvPs7AOAcLfO2Kf16Z_TWCify91haq-swf2ragonuGCFJ9t0bsn25sEFHXK717wrGRlT2ZXcGw5_o1RgyuICc_wdLULWEhJCxa1Zmv&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27zPeMRiY_Bpf6V9g36kFYeqFf5FhEEW-UHi1zLL64k4_cecomo2cEHsaRcdAUcS0wmEYxTv5QJ9yCYDxgQ4Ag4ZNNmCzXI8kLgkV2Zyvt4KaTLRg9tzLtZbikrj8TZZdDDIOUpFsvzN9wlpDxyByT-hYMouRI5kATsPQBK9OohcOjnh&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27zdzbJ_MTR_l_P0w4ZzLbEeuuqO4XznJmWbfRcfTIKiIWWrKbpKfR7NXvqSnzejx5gt-wanR3hokrj2lI1aiwUgbvtnc1TWpbSQvBqt0eoT5TGe6XbEzSNAyzPoEzKTAsCl9K1v1dKBZZGXmVmPIr6BQIk7IGcptZbgBOkUXVLikeED&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27y8mr8q6i2IeBWZ4Tf_yaHwX5xeHpLet_zEwyznSxJ0p5u307OVeC2QEgLZcpPyyiKEJM4b1shK0vGXprBjqcTIp6AZkV3GAJKOAhg-MrQaLcS2UU1NwgBWPCzhZQ0cSAXAj5jGcwvcp0VusO8hYK5VxoXgKDcQU0IvKIsB1L-nguun&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27w3vquNtASbsCSCddc8Y8h4qjYbGcH5KdAshuG6HJEbJkXNMmEUUbdC28rCyxTh05cCVz_BfObg4PXGqWrKxonUcuorI_Ik8s0JF4Q4LNpHH3UG_M5UeNBbgaPZdTJyYDT9lCIhnFN7SLRmUXvuPOfZttwQBXWFfXQ9ZZ6NBD3mHSsJ&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27xMgsiHhjSA7ICUKNmogruEUOBgRoTjcEkUm5ZzKfvzrpPd1Ykc_cfnp_zAGTey_oouOLbQ11-gQujDjHlBqKOb_9vhKRqJM1m-CoSAmtKBO5WpPmojrPapkdn4RJnTTwuQ-EuewU2xCbBOyhe7mUYQM5_F8uN2v5Ub9rQ1gKLLS6ta&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo"]},{"lat":10.0572576,"lng":104.0363948,"name":"사오비치","photos":["https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27zMB7CtIP9iZ4jLMbcvKye8nALwv2-xkIMj1LzAlO-W6r6x5eAp6w1uCpcHQhkOx9bGW0Hfd2rpgCU6ETsC7UBd7PQ3HpPc7UHLm_L3VcxmWkl1Qo4NTGF6OWGiFhsu41H8DxDAiztOozPcJjbNhdVGGh6SQ3wfraIpGia9eQv08pdY&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27ztwOO8LtOmipVN-6kM2c4fTEQbjbS6qeZ5MeDe5ksmXPYeq-sGf9SUBBQuoASYhkvwSM6FMmkGyUz5dxEB2xRoejQwUar1fzbeun5DOec0jZsCEX8OkUpzydJedMCGMyIy2HaB9R8CSJ86RxBwQTs5ZRCdNqbCW1K9fAvY7Clyd9g&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27xwnQw1_S9PecJCXyJ9dV77xYshi1RB5JWVLQY9Oan2eeQZc2bwxRZw7XHrq2B7vg3_vFCrtGWHSa8bf-xSt_f6lPH1mzYMHrldkM66105AKDr0xa_TBPCRwIIsz9p1B_KmueTSAg7QjRu42XCDV7_wkpirl9g4UEV5OKKfIVITFSMR&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27wxg95LvWSrtLVBwqxAMi2cTjFkcz2Gue7vuCHWBUAsKZH3fmGr_xhg2olLs91xTds2mxJocv7DQE7XRqn1MISkzm80SjqXcbU42z-Pvk1ONiHw4-8N5VxJWW3PS2UZQ7-0HWM6zL5Q7ndw0TU3hArSaxYUjmlyYyX5uBAxolBOjydM&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27wtTMEsj5o21gC1ctdgY70eNjkbQiIv6nbRGwqygLpZbYWQ0f8i6g3OZuSiN7eA1Kt--HYKAdn9bZw9oMQyLqsR7oK43gsMlbXjoip-OkRDAPpotUA9jrV2MrKaMGoX_Em0UnAMIcop9P7YzylH1FpJk7gfO0bZVXSA9ecVMiD--K3J&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27xtL7F05tXjF7cGh7t0jEyNxV7FRwlnWrjRQo2n5_3BXKUytG2XmU6X-Lg5bDx5w7T_Ve5R3JZfsE9KqBRnIabXzoFOnZ0-OJmWUnNG5peNt2fqNIE2JCXObjgrCJtiYxjjUOhtPeYxzcQ_WdDEXVJd0t0NK8CqJhRJ_PvPXRmIMUIi&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27yNGZTuBd5ktH2NNgDIq1X3AT9yfrTwV83Q8JhNCJWC82LFwbkNOElNQy6heun2EoDJbFRWyTRtKACJZ4TsJQN2knWhqTOZ7lvEw158Sl3OVOdINEEdAT8dk1nWisqdI3tIS2IzFbN7z8MmpL3qyDSD63U-0pWgg9b6dGLSs9LJ1QHZ&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27xX4__FIr9Qd87G2X9EMb17PeZdMsTzQ7w5evG6mdJDA46i8SPLJt39leykVVdzErQbDyP6e0eq7TSgU-olEvc1uA8LsRl_LcqN95R4OexDWZFh9MOs5ARIKRzfYalsk16nZeKCYVu2Fc33VVAurYInHwB7jUYAaS8gbspjzB3Dss0j&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27xlq-Q5LLFvjWW1xagLibFI_-Zjli1lt33B2aAboNatXnE8m-Sg-xbUliHHN3iqc1SZ7TNUS7Bo2ljrLXWwlyCPtNz0R-F4NPNa77pBXGN-hlynzUmteNd0Lrp58ypHbcU7dNAD1vO-EJrVqjhV-jOLz19S16qKgWYJV3OhYAWC0CiD&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo","https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=AWYs27xPAfKVmirdlk_gKbW9hu9YTIeAGV2Eq0VVaGI9yvbVVIK63XiLdCSdIfY1ZyVqyBXRvl_VHerF2509AQk75uiaWmcZRCmhYrkYlMoQqOvWRFY78UhzP5Ca51dx_wfL73V2b6gfziTqseWgN_uEBvEloPGd9hbaPiGSrhy3ZBePChKU&key=AIzaSyCTY9ShRqYAD8PMVpl7k38tmvPUub6j5bo"]},{"lat":10.2162124655667,"lng":103.960346057882,"name":"푸꾸옥 야시장","photos":[]}];
+        let map, directionsService, directionsRenderer, blinkingPolyline;
+        let activeLabels = [];
+        let selectedLandmarkLabel = null;
+        let currentHotel = null; 
+        let currentTravelTimeLabelOverlay = null; 
+
+        const defaultMapStyles = [
+            {
+                "featureType": "all",
+                "elementType": "labels",
+                "stylers": [
+                    { "visibility": "off" }
+                ]
+            }
+        ];
+
+        const normalMapStyles = []; 
+
+        
+        function initMap() {
+            console.log("지도 초기화 시작");
+
+            if (!locations || locations.length === 0) {
+                alert("호텔 데이터가 없습니다.");
+                return;
+            }
+
+            const mainHotel = locations[0];
+            currentHotel = mainHotel; 
+
+            map = new google.maps.Map(document.getElementById('map'), {
+                center: { lat: mainHotel.lat, lng: mainHotel.lng },
+                zoom: 14,
+                disableDefaultUI: true,
+                styles: defaultMapStyles
+            });
+
+            directionsService = new google.maps.DirectionsService();
+            directionsRenderer = new google.maps.DirectionsRenderer({ map, suppressMarkers: true });
+
+            renderCustomLabels(locations, "호텔", "#0000FF", "hotel");
+            renderCustomLabels(landmarks, "관광지", "#FF1493", "landmark");
+            renderCustomLabels([airport], "공항", "#008000", "airport"); 
+
+            showHotelInfo(mainHotel);
+            showRouteToAirport(mainHotel);
+            showLandmarkDistances(mainHotel);
+
+            addLabelToggleControl();
+        }
+
+        
+        function addLabelToggleControl() {
+            const controlsDiv = document.createElement('div');
+            controlsDiv.id = 'controls';
+
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.id = 'toggleLabels';
+            checkbox.addEventListener('change', toggleMapLabels);
+
+            const label = document.createElement('label');
+            label.htmlFor = 'toggleLabels';
+            label.textContent = '주변정보 보기'; 
+
+            controlsDiv.appendChild(checkbox);
+            controlsDiv.appendChild(label);
+
+            document.body.appendChild(controlsDiv);
+        }
+
+        
+        function toggleMapLabels() {
+            const showDefaultLabels = document.getElementById('toggleLabels').checked;
+            map.setOptions({
+                styles: showDefaultLabels ? normalMapStyles : defaultMapStyles
+            });
+        }
+
+        
+        function renderCustomLabels(data, labelType, labelColor, className) {
+            data.forEach(item => {
+                const labelDiv = document.createElement('div');
+                labelDiv.className = `label ${className}`;
+                labelDiv.style.color = labelColor;
+                labelDiv.innerText = item.name;
+                labelDiv.dataset.lat = item.lat;
+                labelDiv.dataset.lng = item.lng;
+
+                const overlay = new google.maps.OverlayView();
+                overlay.onAdd = function () {
+                    const layer = this.getPanes().overlayMouseTarget;
+                    layer.appendChild(labelDiv);
+                };
+                overlay.draw = function () {
+                    const projection = this.getProjection();
+                    const position = projection.fromLatLngToDivPixel(new google.maps.LatLng(item.lat, item.lng));
+                    labelDiv.style.left = position.x + 'px';
+                    labelDiv.style.top = position.y + 'px';
+                };
+                overlay.onRemove = function () {
+                    labelDiv.parentNode.removeChild(labelDiv);
+                };
+                overlay.setMap(map);
+
+                
+                labelDiv.addEventListener('click', () => {
+                    if (labelType === "호텔") {
+                        currentHotel = item; 
+                        showHotelInfo(item);
+                        showRouteToAirport(item);
+                        showLandmarkDistances(item);
+                        animateLabels(item, airport); 
+                        document.getElementById('selected-landmark-info').style.display = 'none'; 
+                        document.querySelectorAll('.landmark-distance').forEach(div => {
+                            div.classList.remove('selected');
+                        });
+                    }
+
+                    if (labelType === "관광지") {
+                        
+                        animateLabels(currentHotel, item); 
+                        showRouteToLandmark(currentHotel, item); 
+                        showSelectedLandmarkInfo(item); 
+                        highlightLandmarkListItem(item); 
+                    }
+                });
+
+                
+                labelDiv.addEventListener('mouseover', () => {
+                    labelDiv.style.cursor = 'pointer';
+                });
+            });
+        }
+
+        
+        function showHotelInfo(hotel) {
+            const infoContainer = document.getElementById('info-container');
+            const hotelPhoto = hotel.photos && hotel.photos.length > 0 ? hotel.photos[0] : "이미지가 없습니다.";
+            infoContainer.innerHTML = `
+                <select id="hotel-dropdown">
+                    <option value="">호텔 선택</option>
+                    ${locations.map(location => `
+                        <option value="${location.name}" ${location.name === hotel.name ? 'selected' : ''}>${location.name}</option>
+                    `).join('')}
+                </select>
+                <h3>${hotel.name}</h3>
+                <img src="${hotelPhoto}" alt="${hotel.name}" style="width: 100%; height: auto;">
+                <div id="airport-distance">
+                    <h4>공항과의 거리 정보</h4>
+                    <!-- 공항과의 거리 정보가 여기에 표시됩니다 -->
+                </div>
+                <div id="selected-landmark-info">
+                    <h4>선택된 관광지 정보</h4>
+                    <!-- 선택된 관광지의 거리 및 시간 정보가 여기에 표시됩니다 -->
+                </div>
+                <div id="landmark-distances">
+                    <h4>관광지 거리 정보</h4>
+                    <!-- 관광지 리스트가 여기에 표시됩니다 -->
+                </div>
+            `;
+
+            
+            document.querySelectorAll('.label.hotel').forEach(label => {
+                label.classList.remove('selected'); 
+            });
+
+            
+            const selectedHotelLabel = findLabel(hotel);
+            if (selectedHotelLabel) {
+                selectedHotelLabel.classList.add('selected');
+            }
+
+            
+            const hotelDropdown = document.getElementById('hotel-dropdown');
+            hotelDropdown.addEventListener('change', function() {
+                const selectedHotel = locations.find(location => location.name === this.value);
+                if (selectedHotel) {
+                    currentHotel = selectedHotel; 
+                    showHotelInfo(selectedHotel);
+                    showRouteToAirport(selectedHotel);
+                    showLandmarkDistances(selectedHotel);
+                }
+            });
+        }
+
+        
+        function showRouteToAirport(hotel) {
+            directionsService.route({
+                origin: { lat: hotel.lat, lng: hotel.lng },
+                destination: { lat: airport.lat, lng: airport.lng },
+                travelMode: google.maps.TravelMode.DRIVING
+            }, (result, status) => {
+                if (status === google.maps.DirectionsStatus.OK) {
+                    const path = result.routes[0].overview_path;
+                    const leg = result.routes[0].legs[0];
+                    const travelTime = leg.duration.text;
+
+                    animateLabels(hotel, airport);
+                    drawPolyline(path, travelTime); 
+
+                    const bounds = new google.maps.LatLngBounds();
+                    result.routes[0].overview_path.forEach(point => bounds.extend(point));
+                    map.fitBounds(bounds);
+
+                    document.getElementById('airport-distance').innerHTML = `
+                        <p>공항까지 거리: ${leg.distance.text}</p>
+                        <p>예상 시간: ${leg.duration.text}</p>
+                    `;
+                }
+            });
+        }
+
+        
+        function showRouteToLandmark(hotel, landmark) {
+            directionsService.route({
+                origin: { lat: hotel.lat, lng: hotel.lng },
+                destination: { lat: landmark.lat, lng: landmark.lng },
+                travelMode: google.maps.TravelMode.DRIVING
+            }, (result, status) => {
+                if (status === google.maps.DirectionsStatus.OK) {
+                    const path = result.routes[0].overview_path;
+                    const leg = result.routes[0].legs[0];
+                    const travelTime = leg.duration.text;
+
+                    animateLabels(hotel, landmark);
+                    drawPolyline(path, travelTime); 
+
+                    const bounds = new google.maps.LatLngBounds();
+                    result.routes[0].overview_path.forEach(point => bounds.extend(point));
+                    map.fitBounds(bounds);
+
+                    document.getElementById('selected-landmark-info').innerHTML = `
+                        <p>선택된 관광지: <strong>${landmark.name}</strong></p>
+                        <p>거리: ${leg.distance.text}</p>
+                        <p>예상 시간: ${leg.duration.text}</p>
+                    `;
+                    document.getElementById('selected-landmark-info').style.display = 'block';
+                }
+            });
+        }
+
+        
+        function showSelectedLandmarkInfo(landmark) {
+            const selectedInfoDiv = document.getElementById('selected-landmark-info');
+            selectedInfoDiv.innerHTML = `
+                <p>선택된 관광지: <strong>${landmark.name}</strong></p>
+                <p>거리: ${landmark.distanceText}</p>
+                <p>예상 시간: ${landmark.durationText}</p>
+            `;
+            selectedInfoDiv.style.display = 'block';
+        }
+
+        
+        function highlightLandmarkListItem(landmark) {
+            document.querySelectorAll('.landmark-distance').forEach(div => {
+                div.classList.remove('selected');
+                if (div.textContent.startsWith(landmark.name)) {
+                    div.classList.add('selected');
+                }
+            });
+        }
+
+        
+        function showLandmarkDistances(hotel) {
+            const distancesDiv = document.getElementById('landmark-distances');
+            distancesDiv.innerHTML = "";
+
+            const landmarkDistances = [];
+
+            const promises = landmarks.map(landmark => {
+                return new Promise((resolve, reject) => {
+                    directionsService.route({
+                        origin: { lat: hotel.lat, lng: hotel.lng },
+                        destination: { lat: landmark.lat, lng: landmark.lng },
+                        travelMode: google.maps.TravelMode.DRIVING
+                    }, (result, status) => {
+                        if (status === google.maps.DirectionsStatus.OK) {
+                            const leg = result.routes[0].legs[0];
+                            landmarkDistances.push({
+                                name: landmark.name,
+                                distance: leg.distance.value,
+                                distanceText: leg.distance.text,
+                                durationText: leg.duration.text,
+                                path: result.routes[0].overview_path,
+                                lat: landmark.lat, 
+                                lng: landmark.lng  
+                            });
+                            resolve();
+                        } else {
+                            reject(`Failed to calculate distance for ${landmark.name}`);
+                        }
+                    });
+                });
+            });
+
+            Promise.all(promises).then(() => {
+                landmarkDistances.sort((a, b) => a.distance - b.distance);
+                landmarkDistances.forEach(item => {
+                    const landmarkDiv = document.createElement("div");
+                    landmarkDiv.className = "landmark-distance";
+                    landmarkDiv.textContent = `${item.name}: ${item.distanceText}, 예상 시간: ${item.durationText}`;
+                    landmarkDiv.onclick = () => {
+                        
+                        document.querySelectorAll('.landmark-distance').forEach(div => {
+                            div.classList.remove('selected');
+                        });
+                        landmarkDiv.classList.add('selected');
+
+                        
+                        animateLabels(currentHotel, { name: item.name, lat: item.lat, lng: item.lng });
+                        drawPolyline(item.path, item.durationText); 
+
+                        
+                        showSelectedLandmarkInfo(item);
+
+                        
+                        highlightLandmarkListItem(item);
+
+                        const bounds = new google.maps.LatLngBounds();
+                        item.path.forEach(point => bounds.extend(point));
+                        map.fitBounds(bounds);
+                    };
+
+                    distancesDiv.appendChild(landmarkDiv);
+                });
+            }).catch(error => {
+                console.error("Error calculating landmark distances:", error);
+                distancesDiv.innerHTML = "<p>거리 정보를 불러오는 중 오류가 발생했습니다.</p>";
+            });
+        }
+
+        
+        function drawPolyline(path, travelTime) {
+            if (blinkingPolyline) {
+                blinkingPolyline.setMap(null);
+            }
+
+            blinkingPolyline = new google.maps.Polyline({
+                path: path,
+                strokeColor: "#0000FF",
+                strokeOpacity: 0.8,
+                strokeWeight: 5,
+                map: map,
+            });
+
+            
+            const midpointIndex = Math.floor(path.length / 2);
+            const midpoint = path[midpointIndex];
+
+            
+            if (currentTravelTimeLabelOverlay) {
+                currentTravelTimeLabelOverlay.setMap(null);
+                currentTravelTimeLabelOverlay = null;
+            }
+
+            
+            const travelTimeLabel = document.createElement('div');
+            travelTimeLabel.className = 'travel-time-label';
+            travelTimeLabel.innerText = `이동 시간: ${travelTime}`;
+
+            
+            currentTravelTimeLabelOverlay = new google.maps.OverlayView();
+            currentTravelTimeLabelOverlay.onAdd = function () {
+                const layer = this.getPanes().overlayLayer;
+                layer.appendChild(travelTimeLabel);
+            };
+            currentTravelTimeLabelOverlay.draw = function () {
+                const projection = this.getProjection();
+                const position = projection.fromLatLngToDivPixel(new google.maps.LatLng(midpoint.lat(), midpoint.lng()));
+                
+                travelTimeLabel.style.left = position.x + 'px';
+                travelTimeLabel.style.top = (position.y - 20) + 'px'; 
+            };
+            currentTravelTimeLabelOverlay.onRemove = function () {
+                travelTimeLabel.parentNode.removeChild(travelTimeLabel);
+            };
+            currentTravelTimeLabelOverlay.setMap(map);
+        }
+
+        
+        function animateLabels(start, end) {
+            
+            document.querySelectorAll('.label').forEach(label => {
+                label.classList.remove('selected', 'dimmed');
+            });
+
+            
+            const startLabel = findLabel(start);
+            if (startLabel) {
+                startLabel.classList.add('selected');
+            }
+
+            
+            const endLabel = findLabel(end);
+            if (endLabel) {
+                endLabel.classList.add('selected');
+            }
+
+            
+            document.querySelectorAll('.label').forEach(label => {
+                if (!label.classList.contains('selected')) {
+                    label.classList.add('dimmed');
+                }
+            });
+        }
+
+        
+        function findLabel(location) {
+            return document.querySelector(`.label[data-lat="${location.lat}"][data-lng="${location.lng}"]`);
+        }
+    </script>
+</body>
+</html>
